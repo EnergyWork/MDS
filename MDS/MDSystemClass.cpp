@@ -155,15 +155,15 @@ vector<pair<uint32_t, uint32_t>> MDSystem::spread(uint32_t n_atoms, uint32_t n_t
 void MDSystem::calc_forces(int from, int to)
 {
     // вычисляем силу для i-го атома
-    for (size_t i = from; i < to; i++) {
+    double _rij, ff;
+//#pragma omp parallel for private(_rij, ff)
+    for (int i = from; i < to; i++) {
         atoms[i].f = Vector3d(vector<double>(DIM));
-        for (size_t j = 0; j < N; j++) {
+        for (int j = 0; j < N; j++) {
             if (i != j) {
-                mtx.lock();
                 Vector3d rij = NIM(atoms[i].r, atoms[j].r, SIZE);
-                mtx.unlock();
-                double _rij = rij.length();
-                double ff = force_LD(_rij);
+                _rij = rij.length();
+                ff = force_LD(_rij);
                 rij.normalize();
                 atoms[i].f += (rij * ff);
             }
@@ -173,33 +173,24 @@ void MDSystem::calc_forces(int from, int to)
 void MDSystem::integrate(int from, int to, double dt, uint32_t csize)
 {
     // вычисляем его новые координаты и скорость
-    //#pragma omp parallel for
+    Atom tmp;
+//#pragma omp parallel for private(tmp)
     for (int i = from; i < to; i++) {
-        Atom tmp = atoms[i];
-        atoms[i].r = verle_R(atoms[i], dt);
+        tmp = atoms[i];
+        atoms[i].r = verle_R(atoms[i], dt); //atoms[i].r + (atoms[i].dr + (atoms[i].f / (2. * atoms[i].m)) * pow(dt, 2.));
         atoms[i].dr = (atoms[i].r - tmp.r);
-
-        /*if (atoms[i].dr.length() > L_FREE_MOTION) {
-            if (!(large_motion)) {
-                large_motion = true;
-                cout << "too large motion detected" << endl;
-            }
-        }*/
-
-        atoms[i].v = verle_V(atoms[i], dt);
+        assert(atoms[i].dr.length() < L_FREE_MOTION);
+        atoms[i].v = verle_V(atoms[i], dt); //atoms[i].dr / (2. * dt);
         atoms[i].pbc(csize);
-
-        //lock_guard<mutex> lg(mtx);
-        //#pragma omp atomic
-        fulltime += dt;
     }
 }
 void MDSystem::simulate(int from, int to)
 {
-    for (size_t i = from; i < to; i++) {
+//#pragma omp parallel for
+    for (int i = from; i < to; i++) {
         // вычисляем силу для i-го атома
         atoms[i].f = Vector3d(vector<double>(DIM));
-        for (size_t j = 0; j < N; j++) {
+        for (int j = 0; j < N; j++) {
             if (i != j) {
                 Vector3d rij = NIM(atoms[i].r, atoms[j].r, SIZE);
                 double _rij = rij.length();
@@ -226,21 +217,22 @@ void MDSystem::simulate(int from, int to)
 }
 void MDSystem::solve(size_t steps)
 {
-    vector<pair<uint32_t, uint32_t>> intervals = spread(N, N_THREADS);
+    //vector<pair<uint32_t, uint32_t>> intervals = spread(N, N_THREADS);
     for (size_t step = 0; step < steps; step++) {
 
         // распараллеливаем вычисления сил, но там есть казус из-за вложенного цикла
         //for (size_t i = 0; i < N_THREADS; i++)
         //    threads[i] = thread(&MDSystem::calc_forces, this, intervals[i].first, intervals[i].second);
         //for (auto& th : threads) th.join(); // ждем все потоки
-        calc_forces(0, N);
-        
+        calc_forces(0, N);   
         // распаралливаем интегрирование, уже вроде бе казусов
         //for (size_t i = 0; i < N_THREADS; i++)
         //   threads[i] = thread(&MDSystem::integrate, this, intervals[i].first, intervals[i].second, dt, SIZE);
         //for (auto &th : threads) th.join();
         integrate(0, N, dt, SIZE);
-        
+        //simulate(0, N);
+        fulltime += dt;
+
         // последовательно по записываем в файл
         print_to_file();
     }
