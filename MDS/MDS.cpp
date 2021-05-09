@@ -1,8 +1,8 @@
 ﻿#include "Headers.hpp"
 #include "MDSystemClass.hpp"
 
-#define STEPS 10000
-#define N_ATOMS 10
+#define STEPS 1000
+#define N_ATOMS 100
 #define CUBE_SIZE 3
 #define DIM 3
 #define SPEED 2
@@ -10,7 +10,7 @@
 
 int main()
 {
-    omp_set_num_threads(8);
+    omp_set_num_threads(4);
     cout << "Start" << endl;
     MDSystem* mdsys = new MDSystem(N_ATOMS, CUBE_SIZE, DIM, SPEED, N_THREADS);
     mdsys->init_system(true);

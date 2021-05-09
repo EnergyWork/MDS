@@ -174,7 +174,7 @@ void MDSystem::integrate(int from, int to, double dt, uint32_t csize)
 {
     // вычисляем его новые координаты и скорость
     Atom tmp;
-//#pragma omp parallel for private(tmp)
+    //#pragma omp parallel for private(tmp)
     for (int i = from; i < to; i++) {
         tmp = atoms[i];
         atoms[i].r = verle_R(atoms[i], dt); //atoms[i].r + (atoms[i].dr + (atoms[i].f / (2. * atoms[i].m)) * pow(dt, 2.));
